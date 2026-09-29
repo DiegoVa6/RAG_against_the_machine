@@ -1,6 +1,7 @@
 import torch
 from transformers import AutoModelForCausalLM, AutoTokenizer
 
+# Mensaje de prueba para ver cambios en github
 
 MODEL_PATH = "models/Qwen3-0.6B"
 
