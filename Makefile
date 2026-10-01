@@ -17,8 +17,8 @@ clean:
 	rm -rf .mypy_cache .pytest_cache
 
 lint: install
-	uv run python -m flake8 .
-	uv run python -m mypy . --warn-return-any --warn-unused-ignores --ignore-missing-imports --disallow-untyped-defs --check-untyped-defs
+	uv run python -m flake8 src
+	uv run python -m mypy src --warn-return-any --warn-unused-ignores --ignore-missing-imports --disallow-untyped-defs --check-untyped-defs
 
 lint-strict: install
 	python3 -m flake8 src

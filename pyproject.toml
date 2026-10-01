@@ -12,3 +12,9 @@ dependencies = [
 
 [tool.uv]
 package = false
+
+[dependency-groups]
+dev = [
+    "flake8>=7.4.1",
+    "mypy>=2.3.1",
+]
