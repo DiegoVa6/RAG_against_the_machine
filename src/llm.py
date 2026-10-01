@@ -1,7 +1,6 @@
 import torch
 from transformers import AutoModelForCausalLM, AutoTokenizer
 
-# Mensaje de prueba para ver cambios en github
 
 class LLM:
     def __init__(self, model_path: str, device: str | None = None) -> None:
