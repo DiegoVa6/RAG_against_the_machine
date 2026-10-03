@@ -3,8 +3,8 @@
 all: run
 
 run: install
-	uv run python src/chunker.py
-	# uv run python -m src
+# uv run python src/chunker.py
+	uv run python -m src
 
 install: 
 	uv sync
