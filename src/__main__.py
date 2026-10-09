@@ -3,6 +3,7 @@ from pathlib import Path
 # from .llm import LLM
 from .chunker import Chunker
 from .bm25 import BM25Index
+from .recall5 import Recall
 
 
 MODEL_PATH = "models/Qwen3-0.6B"
@@ -32,19 +33,17 @@ def main():
 #    response = llm.generate_response(messages)
 #    print(response)
     docs = get_docs()
-    chunker = Chunker(chunk_size=2000, overlap=200)
+    chunker = Chunker(chunk_size=500, overlap=50)
     chunks = chunker.chunk_corpus(docs)
     bmindex = BM25Index(chunks)
-    resultados = bmindex.search("how to install vllm", k=5)
-    for chunk, nota in resultados:
-        print(nota, chunk.file_path, chunk.start_index, chunk.end_index)
+    recall = Recall(bmindex)
+    dataset = recall.read_file(
+        "data/datasets/AnsweredQuestions/dataset_docs_public.json")
+    recall.check_retrieval(dataset, 10)
 
-    palabras = ["how", "to", "install", "vllm"]
-    for chunk, nota in resultados:
-        i = bmindex.chunks.index(chunk)
-        detalle = {p: bmindex.term_counts[i][p] for p in palabras}
-        print(nota, chunk.file_path, detalle)
-
+#     resultados = bmindex.search("how to install vllm", k=5)
+#     for chunk, nota in resultados:
+#         print(nota, chunk.file_path, chunk.start_index, chunk.end_index)
 
 
 if __name__ == "__main__":
