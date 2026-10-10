@@ -33,13 +33,14 @@ def main():
 #    response = llm.generate_response(messages)
 #    print(response)
     docs = get_docs()
-    chunker = Chunker(chunk_size=500, overlap=50)
+    chunker = Chunker(chunk_size=1000, overlap=100)
     chunks = chunker.chunk_corpus(docs)
+    print(len(chunks))
     bmindex = BM25Index(chunks)
     recall = Recall(bmindex)
     dataset = recall.read_file(
         "data/datasets/AnsweredQuestions/dataset_docs_public.json")
-    recall.check_retrieval(dataset, 10)
+    recall.check_retrieval(dataset, 5)
 
 #     resultados = bmindex.search("how to install vllm", k=5)
 #     for chunk, nota in resultados:
