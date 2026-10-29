@@ -1,3 +1,4 @@
+import ast
 import re
 from dataclasses import dataclass
 
@@ -59,10 +60,27 @@ def find_headings(
     return positions
 
 
+def find_line_starts(text: str) -> list[int]:
+    """Return the offset where each line of text starts.
+
+    line_starts[n - 1] is where line n starts (AST lines count from 1).
+    The last element is len(text), so line_starts[n] is where line n
+    ends, even for the last line.
+    """
+    line_starts: list[int] = []
+    offset = 0
+    for line in text.splitlines(keepends=True):
+        line_starts.append(offset)
+        offset += len(line)
+    line_starts.append(offset)
+    return line_starts
+
+
 class Chunker:
     """Split files into chunks that keep their exact character offsets.
 
-    Markdown files are split by headings; other files by fixed size.
+    Markdown files are split by headings, Python files by their AST
+    nodes, and other files by fixed size.
     """
 
     def __init__(self, chunk_size: int = 2000, overlap: int = 200) -> None:
@@ -144,6 +162,74 @@ class Chunker:
 
         return self.fixed_ranges(start, end)
 
+    # ---------- Python files ----------
+
+    def pyfile_ranges(
+        self,
+        start: int,
+        end: int,
+        nodes: list[ast.stmt],
+        line_starts: list[int],
+    ) -> list[tuple[int, int]]:
+        """Recursively split [start, end) of a Python file by AST nodes.
+
+        1. If the range fits in chunk_size, it is one chunk (base case).
+        2. If there are no nodes to cut at, use fixed-size windows.
+        3. Otherwise, cut it at the end of each node, so blank lines,
+           comments and decorators before a node fall in its piece.
+           Each piece is split again: a class with the nodes of its
+           body (its methods), anything else with no nodes.
+        """
+        if end <= start:
+            return []
+        if end - start <= self.chunk_size:
+            return [(start, end)]
+        if not nodes:
+            return self.fixed_ranges(start, end)
+
+        cuts: list[int] = []
+        # The last node is never a cut: whatever follows it stays with it.
+        for node in nodes[:-1]:
+            end_line = node.end_lineno or node.lineno
+            cuts.append(line_starts[end_line])
+        bounds = [start] + cuts + [end]
+        pieces = list(zip(bounds, bounds[1:]))  # one piece per node
+
+        ranges: list[tuple[int, int]] = []
+        for i in range(len(nodes)):
+            s, e = pieces[i]
+            node = nodes[i]
+            if isinstance(node, ast.ClassDef):
+                ranges.extend(self.pyfile_ranges(s, e, node.body,
+                                                 line_starts))
+            else:
+                ranges.extend(self.pyfile_ranges(s, e, [], line_starts))
+        return ranges
+
+    # ---------- Merging ----------
+
+    def merge_ranges(
+        self, ranges: list[tuple[int, int]]
+    ) -> list[tuple[int, int]]:
+        """Join consecutive ranges while the result fits in chunk_size.
+
+        Only contiguous ranges are joined (one ends where the next
+        starts), so the overlapping windows of fixed_ranges stay as they
+        are.
+        """
+        if not ranges:
+            return []
+        merged: list[tuple[int, int]] = []
+        box_start, box_end = ranges[0]  # the chunk being filled
+        for s, e in ranges[1:]:
+            if s == box_end and e - box_start <= self.chunk_size:
+                box_end = e  # fits: add it to the current chunk
+            else:
+                merged.append((box_start, box_end))
+                box_start, box_end = s, e
+        merged.append((box_start, box_end))  # the last chunk
+        return merged
+
     # ---------- Building chunks ----------
 
     def make_chunks(
@@ -155,6 +241,20 @@ class Chunker:
                   start_index=s, end_index=e)
             for s, e in ranges
         ]
+
+    def chunk_pyfile(self, text: str, file_path: str) -> list[Chunk]:
+        """Split a Python text by its classes, functions and statements.
+
+        If the text is not valid Python, it is split by fixed size.
+        """
+        try:
+            tree = ast.parse(text)
+        except (SyntaxError, ValueError):
+            return self.chunk_text(text, file_path)
+        line_starts = find_line_starts(text)
+        ranges = self.pyfile_ranges(0, len(text), tree.body, line_starts)
+        ranges = self.merge_ranges(ranges)
+        return self.make_chunks(text, file_path, ranges)
 
     def chunk_text(self, text: str, file_path: str) -> list[Chunk]:
         """Split a text into fixed-size chunks."""
@@ -170,6 +270,8 @@ class Chunker:
     def chunk_file(self, file_path: str) -> list[Chunk]:
         """Read a file and split it with the strategy for its type."""
         text = self.read_file(file_path)
+        if file_path.endswith(".py"):
+            return self.chunk_pyfile(text, file_path)
         if file_path.endswith(".md"):
             return self.chunk_markdown(text, file_path)
         return self.chunk_text(text, file_path)

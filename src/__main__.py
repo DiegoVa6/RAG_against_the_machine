@@ -17,7 +17,7 @@ messages = [
 
 def get_docs(root: str = "data/raw") -> list[str]:
     """Return the sorted paths of all .md and .txt files under root."""
-    extensions = {".md", ".txt"}
+    extensions = {".md", ".txt", ".py"}
     return sorted(
         str(path)
         for path in Path(root).rglob("*")
