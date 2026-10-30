@@ -2,6 +2,8 @@ import ast
 import re
 from dataclasses import dataclass
 
+from tqdm import tqdm
+
 # A fenced code block opens/closes with ``` or ~~~ (up to 3 spaces before).
 FENCE_RE = re.compile(r"^ {0,3}(```|~~~)", re.MULTILINE)
 
@@ -279,7 +281,7 @@ class Chunker:
     def chunk_corpus(self, file_paths: list[str]) -> list[Chunk]:
         """Split every file in file_paths and return all chunks together."""
         chunks: list[Chunk] = []
-        for file_path in file_paths:
+        for file_path in tqdm(file_paths, desc="Chunking", unit="file"):
             chunks.extend(self.chunk_file(file_path))
         return chunks
 

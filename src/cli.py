@@ -6,12 +6,12 @@ from typing import Any
 from pydantic import ValidationError
 from tqdm import tqdm
 
-from .chunker import Chunk, Chunker
-from .models import (MinimalSource, UnansweredQuestion, AnsweredQuestion, 
-                     RagDataset, MinimalSearchResults, MinimalAnswer, 
+from .chunker import Chunker
+from .models import (AnsweredDataset, MinimalSource,RagDataset, 
+                     MinimalSearchResults, MinimalAnswer, 
                      StudentSearchResults, StudentSearchResultsAndAnswer)
 from .bm25 import BM25Index
-from .recall5 import Recall
+from .recall5 import question_recall
 
 
 MODEL_NAME = "Qwen/Qwen3-0.6B"
@@ -296,4 +296,45 @@ class RagCLI:
 
 
     def evaluate(self, student_search_results_path: str, dataset_path: str):
-        pass
+        search_data = self._read_json(str(student_search_results_path))
+        if search_data is None:
+            return
+        try:
+            search_results = StudentSearchResults.model_validate(search_data)
+        except ValidationError as e:
+            print(f"Error: {student_search_results_path} "
+                  f"is not a valid search results file:\n{e}")
+            return
+        print(f"Loaded {len(search_results.search_results)} questions")
+
+        data = self._read_json(str(dataset_path))
+        if data is None:
+            return
+        try:
+            dataset = AnsweredDataset.model_validate(data)
+        except ValidationError as e:
+            print(f"Error: {dataset_path} is not a valid dataset with "
+                  f"answers:\n{e}")
+            return
+        print(f"Loaded {len(dataset.rag_questions)} questions")
+
+        # Pair each result with its question in the dataset by question_id
+        gold_by_id = {q.question_id: q for q in dataset.rag_questions}
+        ks = [k for k in (1, 3, 5, 10) if k <= search_results.k]
+        totals = {k: 0.0 for k in ks}  # sum of the recall of each question
+        evaluated = 0
+        for result in tqdm(search_results.search_results, desc="Evaluating"):
+            gold = gold_by_id.get(result.question_id)
+            if gold is None:
+                continue  # this question is not in the dataset
+            evaluated += 1
+            for k in ks:
+                totals[k] += question_recall(gold.sources,
+                                             result.retrieved_sources[:k])
+
+        if evaluated == 0:
+            print("Error: no question of the results is in the dataset")
+            return
+        print(f"Questions evaluated: {evaluated}")
+        for k in ks:
+            print(f"Recall@{k}: {totals[k] / evaluated:.3f}")

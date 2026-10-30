@@ -24,6 +24,16 @@ class RagDataset(BaseModel):
     rag_questions: List[AnsweredQuestion | UnansweredQuestion]
 
 
+class AnsweredDataset(BaseModel):
+    """A dataset where every question must have its sources and answer.
+
+    Without UnansweredQuestion as an alternative, a question with a broken
+    source is a validation error instead of silently losing its sources.
+    """
+
+    rag_questions: List[AnsweredQuestion]
+
+
 class MinimalSearchResults(BaseModel):
     question_id: str
     question: str

@@ -1,6 +1,8 @@
 import math
 from collections import Counter
 
+from tqdm import tqdm
+
 from .chunker import Chunk, tokenize
 
 
@@ -28,7 +30,7 @@ class BM25Index:
         # DF: in how many chunks each term appears (at least once).
         doc_freq: Counter[str] = Counter()
 
-        for chunk in chunks:
+        for chunk in tqdm(chunks, desc="Tokenizing", unit="chunk"):
             tokens = tokenize(chunk.text)
             self.term_counts.append(Counter(tokens))
             self.lengths.append(len(tokens))
