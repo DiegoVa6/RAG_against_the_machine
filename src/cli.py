@@ -305,7 +305,7 @@ class RagCLI:
             print(f"Error: {student_search_results_path} "
                   f"is not a valid search results file:\n{e}")
             return
-        print(f"Loaded {len(search_results.search_results)} questions")
+        print(f"Loaded {len(search_results.search_results)} search_result questions")
 
         data = self._read_json(str(dataset_path))
         if data is None:
@@ -316,7 +316,7 @@ class RagCLI:
             print(f"Error: {dataset_path} is not a valid dataset with "
                   f"answers:\n{e}")
             return
-        print(f"Loaded {len(dataset.rag_questions)} questions")
+        print(f"Loaded {len(dataset.rag_questions)} dataset questions")
 
         # Pair each result with its question in the dataset by question_id
         gold_by_id = {q.question_id: q for q in dataset.rag_questions}
