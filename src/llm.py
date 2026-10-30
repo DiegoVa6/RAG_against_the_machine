@@ -10,17 +10,11 @@ class LLM:
             device = "cuda" if torch.cuda.is_available() else "cpu"
         self.device = device
 
-        # 1. Cargar tokenizer desde nuestro disco
-        self.tokenizer = AutoTokenizer.from_pretrained(
-            self.model_path,
-            local_files_only=True,
-        )
+        self.tokenizer = AutoTokenizer.from_pretrained(self.model_path)
 
-        # 2. Cargar Qwen desde nuestro disco
         self.model = AutoModelForCausalLM.from_pretrained(
             self.model_path,
             torch_dtype="auto",
-            local_files_only=True,
         ).to(self.device)
 
     def generate_response(self, messages):
@@ -42,7 +36,7 @@ class LLM:
         with torch.inference_mode():
             outputs = self.model.generate(
                 **inputs,
-                max_new_tokens=100,
+                max_new_tokens=512,
             )
 
         # 7. Quedarnos solo con los tokens nuevos generados
