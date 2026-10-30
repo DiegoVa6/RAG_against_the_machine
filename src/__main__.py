@@ -1,6 +1,5 @@
 import fire
 
-# from .llm import LLM
 from .cli import RagCLI
 
 #    llm = LLM(MODEL_PATH)

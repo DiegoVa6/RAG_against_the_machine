@@ -1381,6 +1381,7 @@ dependencies = [
     { name = "huggingface-hub" },
     { name = "pydantic" },
     { name = "torch" },
+    { name = "tqdm" },
     { name = "transformers" },
 ]
 
@@ -1396,6 +1397,7 @@ requires-dist = [
     { name = "huggingface-hub", specifier = ">=1.32.0" },
     { name = "pydantic", specifier = ">=2.14.1" },
     { name = "torch", specifier = ">=2.14.0" },
+    { name = "tqdm", specifier = ">=4.70.1" },
     { name = "transformers", specifier = ">=5.17.0" },
 ]
 
