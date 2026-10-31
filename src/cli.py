@@ -3,7 +3,7 @@ import pickle
 from pathlib import Path
 from typing import Any
 
-from pydantic import ValidationError
+from pydantic import BaseModel, ValidationError
 from tqdm import tqdm
 
 from .chunker import Chunker
@@ -76,6 +76,44 @@ class RagCLI:
         except json.JSONDecodeError as e:
             print(f"Error: {file_path} is not valid JSON ({e})")
         return None
+
+    def _check_query(self, query: Any) -> str | None:
+        """Return the query as text, or None (with a message) if empty.
+
+        Fire guesses types from the input: `search 123` gives an int.
+        """
+        text = str(query)
+        if not text.strip():
+            print("Error: the query is empty")
+            return None
+        return text
+
+    def _check_k(self, k: Any) -> bool:
+        """Tell if k is a valid number of results, with a message if not."""
+        if not isinstance(k, int) or k < 1:
+            print("Error: k must be an integer >= 1")
+            return False
+        return True
+
+    def _save_json(self, data: BaseModel, save_directory: str,
+                   file_name: str, what: str) -> None:
+        """Write data as JSON to save_directory/file_name and report it.
+
+        Args:
+            data: The pydantic model to save.
+            save_directory: Folder to write into (created if needed).
+            file_name: Name of the output file.
+            what: Name of the content, for the final message.
+        """
+        output_path = Path(save_directory) / file_name
+        try:
+            output_path.parent.mkdir(parents=True, exist_ok=True)
+            with open(output_path, "w", encoding="utf-8") as f:
+                f.write(data.model_dump_json(indent=2))
+        except OSError as e:
+            print(f"Error: can't write {output_path} ({e})")
+            return
+        print(f"Saved {what} to {output_path}")
 
     def _read_source(self, source: MinimalSource,
                      cache: dict[str, str]) -> str:
@@ -163,17 +201,13 @@ class RagCLI:
             query: The question to search for.
             k: Number of sources to return.
         """
-        query = str(query)
-        if not query.strip():
-            print("Error: the query is empty")
-            return
-        if not isinstance(k, int) or k < 1:
-            print("Error: k must be an integer >= 1")
+        checked_query = self._check_query(query)
+        if checked_query is None or not self._check_k(k):
             return
         index = self._load_index()
         if index is None:
             return
-        resultados = index.search(query, k)
+        resultados = index.search(checked_query, k)
         if not resultados:
             print("No results found.")
             return
@@ -193,8 +227,7 @@ class RagCLI:
             k: Number of sources to return per question.
         """
         # 1. Check the arguments before doing any work
-        if not isinstance(k, int) or k < 1:
-            print("Error: k must be an integer >= 1")
+        if not self._check_k(k):
             return
         save_directory = str(save_directory)
         if not save_directory.strip():
@@ -233,15 +266,9 @@ class RagCLI:
         results = StudentSearchResults(search_results=search_results, k=k)
 
         # 4. Save it with the same file name as the dataset
-        output_path = Path(save_directory) / Path(str(dataset_path)).name
-        try:
-            output_path.parent.mkdir(parents=True, exist_ok=True)
-            with open(output_path, "w", encoding="utf-8") as f:
-                f.write(results.model_dump_json(indent=2))
-        except OSError as e:
-            print(f"Error: can't write {output_path} ({e})")
-            return
-        print(f"Saved student_search_results to {output_path}")
+        self._save_json(results, save_directory,
+                        Path(str(dataset_path)).name,
+                        "student_search_results")
 
     def answer(self, query: str, k: int = 5) -> None:
         """Answer a single query with Qwen, using the top-k sources.
@@ -250,22 +277,19 @@ class RagCLI:
             query: The question to answer.
             k: Number of sources to retrieve as context.
         """
-        query = str(query)
-        if not query.strip():
-            print("Error: the query is empty")
-            return
-        if not isinstance(k, int) or k < 1:
-            print("Error: k must be an integer >= 1")
+        checked_query = self._check_query(query)
+        if checked_query is None or not self._check_k(k):
             return
         index = self._load_index()
         if index is None:
             return
-        resultados = index.search(query, k)
+        resultados = index.search(checked_query, k)
         if not resultados:
             print("No relevant sources found: can't answer this question.")
             return
         messages = self._create_prompt(
-            query, [(chunk.file_path, chunk.text) for chunk, _ in resultados])
+            checked_query,
+            [(chunk.file_path, chunk.text) for chunk, _ in resultados])
 
         from .llm import LLM
         try:
@@ -344,16 +368,9 @@ class RagCLI:
                                                k=search_results.k)
 
         # Save it with the same file name as the search results
-        output_path = (Path(save_directory)
-                       / Path(student_search_results_path).name)
-        try:
-            output_path.parent.mkdir(parents=True, exist_ok=True)
-            with open(output_path, "w", encoding="utf-8") as f:
-                f.write(output.model_dump_json(indent=2))
-        except OSError as e:
-            print(f"Error: can't write {output_path} ({e})")
-            return
-        print(f"Saved student_search_results_and_answer to {output_path}")
+        self._save_json(output, save_directory,
+                        Path(student_search_results_path).name,
+                        "student_search_results_and_answer")
 
     def evaluate(self, student_search_results_path: str,
                  dataset_path: str) -> None:
