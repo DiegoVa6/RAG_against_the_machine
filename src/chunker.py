@@ -7,6 +7,20 @@ from tqdm import tqdm
 # A fenced code block opens/closes with ``` or ~~~ (up to 3 spaces before).
 FENCE_RE = re.compile(r"^ {0,3}(```|~~~)", re.MULTILINE)
 
+# A word: letters, digits and _ (so load_lora_adapter is one word).
+WORD_RE = re.compile(r"\w+")
+# The parts of a CamelCase word: HTTPServer -> HTTP, Server;
+# FusedMoE -> Fused, Mo, E; layer2 -> layer, 2.
+CAMEL_RE = re.compile(r"[A-Z]+(?=[A-Z][a-z])|[A-Z]?[a-z]+|[A-Z]+|\d+")
+# Very common words that say nothing about the topic: they are in almost
+# every question and chunk, so they only add noise to BM25. "vllm" is
+# here too: the whole corpus is about it.
+STOPWORDS = {
+    "the", "a", "an", "of", "to", "in", "is", "are", "and", "or", "for",
+    "on", "with", "what", "how", "does", "do", "which", "can", "be", "by",
+    "as", "at", "it", "this", "that", "from", "vllm",
+}
+
 
 @dataclass
 class Chunk:
@@ -287,5 +301,20 @@ class Chunker:
 
 
 def tokenize(text: str) -> list[str]:
-    """Lowercase a text and split it into word terms (letters, digits, _)."""
-    return re.findall(r"\w+", text.lower())
+    """Split a text into lowercase terms, also splitting identifiers.
+
+    Each word is kept whole, and if it is an identifier its parts are
+    added too: load_lora_adapter -> load_lora_adapter, load, lora, adapter.
+    So a chunk matches a question that quotes the identifier and also one
+    that only uses its words. Stopwords are removed at the end.
+    """
+    terms: list[str] = []
+    for word in WORD_RE.findall(text):
+        terms.append(word.lower())
+        # Split snake_case first, then CamelCase inside each piece
+        parts = [part.lower()
+                 for piece in word.split("_")
+                 for part in CAMEL_RE.findall(piece)]
+        if len(parts) > 1:
+            terms.extend(parts)
+    return [term for term in terms if term not in STOPWORDS]

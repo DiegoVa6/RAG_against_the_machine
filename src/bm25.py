@@ -31,7 +31,10 @@ class BM25Index:
         doc_freq: Counter[str] = Counter()
 
         for chunk in tqdm(chunks, desc="Tokenizing", unit="chunk"):
-            tokens = tokenize(chunk.text)
+            # The path is indexed too: its words (module, topic...) often
+            # appear in questions but not in the chunk text. chunk.text is
+            # not changed, so offsets and prompts stay the same.
+            tokens = tokenize(chunk.file_path + "\n" + chunk.text)
             self.term_counts.append(Counter(tokens))
             self.lengths.append(len(tokens))
             doc_freq.update(set(tokens))  # set: count each term once
