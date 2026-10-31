@@ -15,6 +15,9 @@ from .recall5 import question_recall
 
 
 MODEL_NAME = "Qwen/Qwen3-0.6B"
+# The moulinette rejects any source longer than 2000 characters
+MAX_CHUNK_SIZE = 2000
+MIN_CHUNK_SIZE = 100
 MAX_CONTEXT_CHARS = 8000
 SYSTEM_PROMPT = (
     "You are an assistant that answers questions about the vLLM codebase. "
@@ -117,14 +120,16 @@ class RagCLI:
         """Chunk data/raw/ and save a BM25 index under data/processed/.
 
         Args:
-            max_chunk_size: Maximum characters per chunk (1 to 2000).
+            max_chunk_size: Maximum characters per chunk (100 to 2000).
             overlap: Characters shared by consecutive fixed-size chunks.
                 Defaults to 10% of max_chunk_size.
         """
+        # Below MIN_CHUNK_SIZE the corpus becomes millions of chunks and
+        # the index may not fit in memory.
         if (not isinstance(max_chunk_size, int)
-                or not 1 <= max_chunk_size <= 2000):
-            print("Error: max_chunk_size must be an integer between 1 and "
-                  "2000")
+                or not MIN_CHUNK_SIZE <= max_chunk_size <= MAX_CHUNK_SIZE):
+            print(f"Error: max_chunk_size must be an integer between "
+                  f"{MIN_CHUNK_SIZE} and {MAX_CHUNK_SIZE}")
             return
         if overlap is None:
             overlap = max_chunk_size // 10
@@ -132,13 +137,23 @@ class RagCLI:
             print("Error: overlap must be an integer >= 0 and smaller than "
                   "max_chunk_size")
             return
-        Path("data/processed").mkdir(parents=True, exist_ok=True)
         docs = get_docs()
+        if not docs:
+            print("Error: no .md, .txt or .py files found in data/raw/")
+            return
         chunker = Chunker(chunk_size=max_chunk_size, overlap=overlap)
         chunks = chunker.chunk_corpus(docs)
+        if not chunks:
+            print("Error: no file in data/raw/ could be read")
+            return
         index = BM25Index(chunks)
-        with open("data/processed/index.pkl", "wb") as f:
-            pickle.dump(index, f)
+        try:
+            Path("data/processed").mkdir(parents=True, exist_ok=True)
+            with open("data/processed/index.pkl", "wb") as f:
+                pickle.dump(index, f)
+        except OSError as e:
+            print(f"Error: can't save the index in data/processed/ ({e})")
+            return
         print(f"Indexed {len(chunks)} chunks under data/processed/")
 
     def search(self, query: str, k: int = 5) -> None:

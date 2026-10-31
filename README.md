@@ -120,7 +120,7 @@ Every command runs as `uv run python -m src <command> [options]`
 
 | Command | Options (default) | What it does |
 |---|---|---|
-| `index` | `--max_chunk_size` (2000), `--overlap` (10 %) | Chunks `data/raw/` and saves the index to `data/processed/index.pkl` |
+| `index` | `--max_chunk_size` (2000, from 100 to 2000), `--overlap` (10 %) | Chunks `data/raw/` and saves the index to `data/processed/index.pkl` |
 | `search QUERY` | `--k` (5) | Prints the top-k sources for one question |
 | `search_dataset` | `--dataset_path`, `--save_directory`, `--k` (5) | Searches a whole dataset → `StudentSearchResults` JSON |
 | `answer QUERY` | `--k` (5) | Answers one question and shows its sources |
@@ -511,7 +511,8 @@ small Markdown sections, neither beat the final setup.</sub>
 | One **pickle** file for the index | The simplest way to save the whole `BM25Index` object (38 MB) and load it back as is. |
 | **Lazy import** of PyTorch | Only `answer*` import it, so `index`, `search` and `evaluate` start instantly. |
 | Model loaded by **Hugging Face name** | The evaluator only runs `uv sync`: no manual download, no local path. |
-| **Validate first, never crash** | Every command checks its inputs before any heavy work, and every error (missing file, malformed JSON, `k=0`, empty query…) prints a message instead of a traceback. |
+| **Validate first, never crash** | Every command checks its inputs before any heavy work, and every error (missing file, malformed JSON, `k=0`, empty query, unreadable corpus file…) prints a message instead of a traceback. One bad file or question never stops the others. |
+| `max_chunk_size` between **100** and 2000 | 2000 is the moulinette's limit. Below 100 the corpus becomes millions of chunks (235k at 100, using 1.1 GB of RAM) and the index may not fit in memory. |
 | `str()` on text arguments | Fire guesses types from the input: `search 123` would pass an `int`. |
 | Strict `AnsweredDataset` for `evaluate` | With `AnsweredQuestion \| UnansweredQuestion`, a question with a broken source silently became "unanswered"; without the alternative it is a clear validation error. |
 | A **system prompt** with explicit rules | The grounding rule ("only the sources, say when you can't find it") is what stops the small model from inventing. |
@@ -665,7 +666,9 @@ Recall@10: 0.860
 | `search ""` | `Error: the query is empty` |
 | `search "vllm" --k 0` | `Error: k must be an integer >= 1` |
 | `search "zzzzqqqq"` | `No results found.` |
-| `index --max_chunk_size 3000` | `Error: max_chunk_size must be an integer between 1 and 2000` |
+| `index --max_chunk_size 3000` | `Error: max_chunk_size must be an integer between 100 and 2000` |
+| `index` with a binary / non-UTF-8 file in `data/raw/` | `Warning: skipped data/raw/x.txt (not a UTF-8 text file)`, the other files are indexed |
+| `index` with no `data/raw/` folder | `Error: no .md, .txt or .py files found in data/raw/` |
 | `search_dataset --dataset_path missing.json ...` | `Error: file not found: missing.json` |
 | `search "lora"` before running `index` | `Error: index not found. Run 'index' first.` |
 | A JSON file cut in half | `Error: ... is not valid JSON (Expecting ',' delimiter ...)` |

@@ -293,10 +293,20 @@ class Chunker:
         return self.chunk_text(text, file_path)
 
     def chunk_corpus(self, file_paths: list[str]) -> list[Chunk]:
-        """Split every file in file_paths and return all chunks together."""
+        """Split every file in file_paths and return all chunks together.
+
+        A file that can't be read (not UTF-8 text, no permission...) is
+        skipped with a warning, so one bad file doesn't stop the others.
+        """
         chunks: list[Chunk] = []
         for file_path in tqdm(file_paths, desc="Chunking", unit="file"):
-            chunks.extend(self.chunk_file(file_path))
+            try:
+                chunks.extend(self.chunk_file(file_path))
+            except UnicodeDecodeError:
+                tqdm.write(f"Warning: skipped {file_path} "
+                           "(not a UTF-8 text file)")
+            except OSError as e:
+                tqdm.write(f"Warning: skipped {file_path} ({e.strerror})")
         return chunks
 
 
