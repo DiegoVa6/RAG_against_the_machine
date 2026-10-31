@@ -7,8 +7,8 @@ from pydantic import ValidationError
 from tqdm import tqdm
 
 from .chunker import Chunker
-from .models import (AnsweredDataset, MinimalSource,RagDataset, 
-                     MinimalSearchResults, MinimalAnswer, 
+from .models import (AnsweredDataset, MinimalSource, RagDataset,
+                     MinimalSearchResults, MinimalAnswer,
                      StudentSearchResults, StudentSearchResultsAndAnswer)
 from .bm25 import BM25Index
 from .recall5 import question_recall
@@ -26,7 +26,7 @@ SYSTEM_PROMPT = (
 
 
 def get_docs(root: str = "data/raw") -> list[str]:
-    """Return the sorted paths of all .md and .txt files under root."""
+    """Return the sorted paths of all .md, .txt and .py files under root."""
     extensions = {".md", ".txt", ".py"}
     return sorted(
         str(path)
@@ -36,6 +36,12 @@ def get_docs(root: str = "data/raw") -> list[str]:
 
 
 class RagCLI:
+    """Command-line interface of the RAG system, exposed with Python Fire.
+
+    Each public method is a command: uv run python -m src <command>.
+    Methods starting with "_" are helpers and are not shown as commands.
+    """
+
     def _load_index(self) -> BM25Index | None:
         """Load the index saved by `index`, or None if it can't be loaded."""
         try:
@@ -106,7 +112,15 @@ class RagCLI:
              "content": f"Context:\n{context}Question: {query}"},
         ]
 
-    def index(self, max_chunk_size: int = 2000, overlap: int | None = None):
+    def index(self, max_chunk_size: int = 2000,
+              overlap: int | None = None) -> None:
+        """Chunk data/raw/ and save a BM25 index under data/processed/.
+
+        Args:
+            max_chunk_size: Maximum characters per chunk (1 to 2000).
+            overlap: Characters shared by consecutive fixed-size chunks.
+                Defaults to 10% of max_chunk_size.
+        """
         if (not isinstance(max_chunk_size, int)
                 or not 1 <= max_chunk_size <= 2000):
             print("Error: max_chunk_size must be an integer between 1 and "
@@ -127,7 +141,13 @@ class RagCLI:
             pickle.dump(index, f)
         print(f"Indexed {len(chunks)} chunks under data/processed/")
 
-    def search(self, query: str, k: int = 5):
+    def search(self, query: str, k: int = 5) -> None:
+        """Print the top-k sources for a single query.
+
+        Args:
+            query: The question to search for.
+            k: Number of sources to return.
+        """
         query = str(query)
         if not query.strip():
             print("Error: the query is empty")
@@ -146,7 +166,17 @@ class RagCLI:
             print(f"{chunk.file_path} [{chunk.start_index}:{chunk.end_index}]")
 
     def search_dataset(self, dataset_path: str, save_directory: str,
-                       k: int = 5):
+                       k: int = 5) -> None:
+        """Search every question of a dataset and save the results.
+
+        The output is a StudentSearchResults JSON file with the same name
+        as the dataset, inside save_directory.
+
+        Args:
+            dataset_path: JSON file with the questions (a RagDataset).
+            save_directory: Folder where the results are written.
+            k: Number of sources to return per question.
+        """
         # 1. Check the arguments before doing any work
         if not isinstance(k, int) or k < 1:
             print("Error: k must be an integer >= 1")
@@ -198,7 +228,13 @@ class RagCLI:
             return
         print(f"Saved student_search_results to {output_path}")
 
-    def answer(self, query: str, k: int = 5):
+    def answer(self, query: str, k: int = 5) -> None:
+        """Answer a single query with Qwen, using the top-k sources.
+
+        Args:
+            query: The question to answer.
+            k: Number of sources to retrieve as context.
+        """
         query = str(query)
         if not query.strip():
             print("Error: the query is empty")
@@ -226,10 +262,20 @@ class RagCLI:
         print(response)
         print("\nSources:")
         for chunk, _ in resultados:
-            print(f"  {chunk.file_path} [{chunk.start_index}:{chunk.end_index}]")
+            print(f"  {chunk.file_path} "
+                  f"[{chunk.start_index}:{chunk.end_index}]")
 
     def answer_dataset(self, student_search_results_path: str,
-                       save_directory: str):
+                       save_directory: str) -> None:
+        """Generate an answer for every question of a search results file.
+
+        The output is a StudentSearchResultsAndAnswer JSON file with the
+        same name as the input file, inside save_directory.
+
+        Args:
+            student_search_results_path: JSON file made by search_dataset.
+            save_directory: Folder where the answers are written.
+        """
         student_search_results_path = str(student_search_results_path)
 
         save_directory = str(save_directory)
@@ -294,8 +340,18 @@ class RagCLI:
             return
         print(f"Saved student_search_results_and_answer to {output_path}")
 
+    def evaluate(self, student_search_results_path: str,
+                 dataset_path: str) -> None:
+        """Print the recall@k of search results against a dataset.
 
-    def evaluate(self, student_search_results_path: str, dataset_path: str):
+        A correct source counts as found when a result is in the same file
+        and overlaps it with an IoU above 0.05, like the moulinette.
+
+        Args:
+            student_search_results_path: JSON file made by search_dataset.
+            dataset_path: JSON file with the questions and their correct
+                sources (an AnsweredQuestions dataset).
+        """
         search_data = self._read_json(str(student_search_results_path))
         if search_data is None:
             return
@@ -305,7 +361,8 @@ class RagCLI:
             print(f"Error: {student_search_results_path} "
                   f"is not a valid search results file:\n{e}")
             return
-        print(f"Loaded {len(search_results.search_results)} search_result questions")
+        print(f"Loaded {len(search_results.search_results)} "
+              "search_result questions")
 
         data = self._read_json(str(dataset_path))
         if data is None:

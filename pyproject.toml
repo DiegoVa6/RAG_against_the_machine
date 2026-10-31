@@ -21,3 +21,7 @@ dev = [
     "flake8>=7.4.1",
     "mypy>=2.3.1",
 ]
+
+[tool.mypy]
+# Only check our code: not the virtualenv or the vLLM corpus in data/
+exclude = ["^\\.venv/", "^data/", "^models/"]

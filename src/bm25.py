@@ -53,7 +53,7 @@ class BM25Index:
         counts = self.term_counts[i]
         # > 1 if the chunk is longer than average, < 1 if shorter.
         length_norm = 1 - self.b + self.b * self.lengths[i] / self.avg_length
- 
+
         total = 0.0
         for term in query_terms:
             tf = counts[term]
